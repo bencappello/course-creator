@@ -1,5 +1,63 @@
 import { CourseModule, Course } from './types';
 
+interface ApiResponse<T = unknown> {
+  success: boolean;
+  data?: T;
+  error?: string;
+}
+
+async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<ApiResponse<T>> {
+  try {
+    const response = await fetch(`/api${endpoint}`, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options?.headers,
+      },
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: data.error || `HTTP error! status: ${response.status}`,
+      };
+    }
+
+    return {
+      success: true,
+      data,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'An unexpected error occurred',
+    };
+  }
+}
+
+export async function generateOutline(prompt: string, numModules: number, depth: string) {
+  return fetchApi('/generate-outline', {
+    method: 'POST',
+    body: JSON.stringify({ prompt, numModules, depth }),
+  });
+}
+
+export async function generateCourse(outline: CourseModule[], depth: string) {
+  return fetchApi('/generate-course', {
+    method: 'POST',
+    body: JSON.stringify({ outline, depth }),
+  });
+}
+
+export async function generateImage(prompt: string) {
+  return fetchApi<string>('/generate-image', {
+    method: 'POST',
+    body: JSON.stringify({ prompt }),
+  });
+}
+
 export class ApiClient {
   private baseUrl: string;
 

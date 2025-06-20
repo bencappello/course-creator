@@ -6,6 +6,7 @@ import { PromptForm } from './PromptForm';
 import { OutlineReview } from './OutlineReview';
 import { LoadingScreen } from './LoadingScreen';
 import { ErrorScreen } from './ErrorScreen';
+import { CourseViewer } from './CourseViewer';
 import { useCourseOperations } from '@/hooks/useCourseOperations';
 
 export function CourseStageRenderer() {
@@ -36,12 +37,14 @@ export function CourseStageRenderer() {
       return <OutlineReview />;
     
     case 'courseView':
-      // This will be implemented in the next phase
+      if (!state.fullCourse) {
+        return <PromptForm />; // Fallback if no course
+      }
       return (
-        <div className="text-center py-8">
-          <h2 className="text-2xl font-bold text-gray-800">Course Viewer Coming Soon!</h2>
-          <p className="text-gray-600 mt-2">The course viewing functionality will be implemented in the next phase.</p>
-        </div>
+        <CourseViewer 
+          course={state.fullCourse} 
+          onHome={resetToPrompt}
+        />
       );
     
     default:
