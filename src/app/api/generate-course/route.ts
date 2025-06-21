@@ -1,174 +1,245 @@
 import { NextRequest, NextResponse } from 'next/server';
+import OpenAI from 'openai';
+import { CourseModule, Course } from '@/lib/types';
 
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
-interface GeneratedModule {
+interface OutlineModule {
   title: string;
-  slides: GeneratedSlide[];
-  quiz: GeneratedQuizQuestion[];
+  description: string;
 }
 
-interface GeneratedSlide {
-  title: string;
-  image_prompt: string;
-  content: {
-    summary: string;
-    details: string[];
-    deep_dive: string[];
-  };
-}
-
-interface GeneratedQuizQuestion {
-  question: string;
-  options: string[];
-  correct_answer: string;
+// Direct batch image generation function
+async function generateImagesDirectly(prompts: string[]): Promise<string[]> {
+  const IMAGE_MODELS = [
+    'gpt-4.1',
+    'dall-e-3',
+    'dall-e-2',
+  ];
+  
+  const results: string[] = [];
+  
+  for (const prompt of prompts) {
+    let imageGenerated = false;
+    
+    for (const model of IMAGE_MODELS) {
+      try {
+        console.log(`🖼️ Trying ${model} for prompt: "${prompt.substring(0, 50)}..."`);
+        
+        const response = await openai.images.generate({
+          model: model as Parameters<typeof openai.images.generate>[0]['model'],
+          prompt: `Educational illustration: ${prompt}`,
+          size: '512x512',
+          n: 1,
+        });
+        
+        const imageUrl = response.data?.[0]?.url;
+        if (imageUrl) {
+          console.log(`✅ Success with ${model}`);
+          results.push(imageUrl);
+          imageGenerated = true;
+          break;
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.log(`❌ ${model} failed:`, errorMessage.substring(0, 100));
+      }
+    }
+    
+    if (!imageGenerated) {
+      console.log(`⚠️ Failed to generate image for prompt: "${prompt.substring(0, 50)}..."`);
+      results.push(''); // Push empty string to maintain array indices
+    }
+  }
+  
+  return results;
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const { prompt, outline, contentDepth } = await request.json();
+    const body = await request.json();
+    console.log('🔸 Generate course request received:', {
+      hasPrompt: !!body.prompt,
+      hasOutline: !!body.outline,
+      hasDepth: !!body.depth,
+      outlineLength: body.outline?.length
+    });
+    
+    const { prompt, outline, depth } = body;
 
-    const oneShotExample = `{
-      "title": "Example Slide Title",
-      "image_prompt": "An example image prompt.",
-      "content": {
-        "summary": "A brief, one-paragraph overview of the topic.",
-        "details": [
-          "A more detailed paragraph expanding on the summary.",
-          "Another paragraph providing more specifics and context."
-        ],
-        "deep_dive": [
-          "A highly detailed paragraph with nuanced information for experts.",
-          "Another comprehensive paragraph with advanced concepts."
-        ]
-      }
-    }`;
+    if (!process.env.OPENAI_API_KEY) {
+      console.error('🔸 OpenAI API key not configured');
+      return NextResponse.json(
+        { error: 'OpenAI API key not configured' },
+        { status: 500 }
+      );
+    }
 
-    const courseSchema = {
-      type: "OBJECT",
-      properties: {
-        cover: {
-          type: "OBJECT",
-          properties: {
-            image_prompt: { type: "STRING" }
-          },
-          required: ["image_prompt"]
-        },
-        modules: {
-          type: "ARRAY",
-          items: {
-            type: "OBJECT",
-            properties: {
-              title: { type: "STRING" },
-              slides: {
-                type: "ARRAY",
-                items: {
-                  type: "OBJECT",
-                  properties: {
-                    title: { type: "STRING" },
-                    image_prompt: { type: "STRING" },
-                    content: {
-                      type: "OBJECT",
-                      properties: {
-                        summary: { type: "STRING" },
-                        details: { type: "ARRAY", items: { type: "STRING" } },
-                        deep_dive: { type: "ARRAY", items: { type: "STRING" } }
-                      },
-                      required: ["summary", "details", "deep_dive"]
-                    }
-                  },
-                  required: ["title", "image_prompt", "content"]
-                }
-              },
-              quiz: {
-                type: "ARRAY",
-                items: {
-                  type: "OBJECT",
-                  properties: {
-                    question: { type: "STRING" },
-                    options: { type: "ARRAY", items: { type: "STRING" } },
-                    correct_answer: { type: "STRING" }
-                  },
-                  required: ["question", "options", "correct_answer"]
-                }
-              }
-            },
-            required: ["title", "slides", "quiz"]
-          }
-        }
-      },
-      required: ["cover", "modules"]
+    if (!outline || !Array.isArray(outline)) {
+      console.error('🔸 Invalid outline provided');
+      return NextResponse.json(
+        { error: 'Invalid outline provided' },
+        { status: 400 }
+      );
+    }
+
+    // Determine content length based on depth
+    const contentConfig = {
+      Low: { summaryLength: 100, detailsCount: 2, deepDiveCount: 1 },
+      Medium: { summaryLength: 150, detailsCount: 3, deepDiveCount: 2 },
+      High: { summaryLength: 200, detailsCount: 4, deepDiveCount: 3 }
     };
 
-    const coursePrompt = `You are an expert instructional designer. Generate a complete course with the following outline: ${JSON.stringify(outline)}.
-    
-    IMPORTANT: Your output must EXACTLY follow this JSON structure. Every slide MUST include content with summary, details (array), and deep_dive (array).
-    
-    Here's an example slide structure: ${oneShotExample}
-    
-    For EACH module, create:
-    - 3-5 informative slides with comprehensive content (summary + details + deep_dive)
-    - A 5-question multiple choice quiz
-    
-    Requirements:
-    - Generate engaging, educational content
-    - Include diverse quiz questions testing key concepts
-    - Create descriptive image prompts for visual learning
-    - Ensure logical flow within and between modules
-    
-    Output ONLY valid JSON matching the specified schema.`;
+    const config = contentConfig[depth as keyof typeof contentConfig] || contentConfig.Medium;
 
-    const response = await fetch(`${GEMINI_API_URL}?key=${process.env.GEMINI_API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: coursePrompt }] }],
-        generationConfig: {
-          responseMimeType: "application/json",
-          responseSchema: courseSchema
-        }
-      })
+    // Generate course cover
+    const coverPrompt = `Generate a course title and image description for a course with these modules: ${outline.map((m: OutlineModule) => m.title).join(', ')}. 
+    Return as JSON with format: { "title": "Course Title", "imagePrompt": "detailed image description for course cover" }`;
+
+    const coverResponse = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: 'You are a course designer. Create engaging course titles and visual descriptions.' },
+        { role: 'user', content: coverPrompt }
+      ],
+      temperature: 0.7,
+      response_format: { type: 'json_object' },
     });
 
-    if (!response.ok) {
-      throw new Error(`Gemini API error: ${response.statusText}`);
+    const coverContent = JSON.parse(coverResponse.choices[0].message.content || '{}');
+
+    // Generate full course modules
+    const modules: CourseModule[] = await Promise.all(
+      outline.map(async (module: OutlineModule) => {
+        const modulePrompt = `Create a detailed course module for: "${module.title}" - ${module.description}
+        
+        Generate exactly 3 slides and 3 quiz questions.
+        
+        For each slide, provide:
+        - title: Clear, descriptive slide title
+        - image_prompt: Detailed description for an educational image
+        - content: An object with:
+          - summary: ${config.summaryLength} word overview
+          - details: Array of ${config.detailsCount} detailed points
+          - deep_dive: Array of ${config.deepDiveCount} in-depth explanations
+        
+        For quiz questions, provide:
+        - question: Clear question text
+        - options: Array of 4 possible answers
+        - correct_answer: The correct option (must match one of the options exactly)
+        
+        Return as JSON with format:
+        {
+          "slides": [...],
+          "quiz": [...]
+        }`;
+
+        const moduleResponse = await openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          messages: [
+            { role: 'system', content: 'You are an expert educator creating comprehensive course content.' },
+            { role: 'user', content: modulePrompt }
+          ],
+          temperature: 0.7,
+          max_tokens: 2000,
+          response_format: { type: 'json_object' },
+        });
+
+        const moduleContent = JSON.parse(moduleResponse.choices[0].message.content || '{}');
+
+        return {
+          title: module.title,
+          description: module.description,
+          slides: moduleContent.slides || [],
+          quiz: moduleContent.quiz || []
+        };
+      })
+    );
+
+    // Collect all image prompts for batch generation
+    const allImagePrompts: string[] = [];
+    const imagePromptMap: { [key: string]: number } = {};
+    
+    // Add cover image prompt
+    const coverImagePrompt = coverContent.imagePrompt || 'A professional course cover image';
+    allImagePrompts.push(coverImagePrompt);
+    imagePromptMap['cover'] = 0;
+    
+    // Add slide image prompts
+    modules.forEach((module, moduleIndex) => {
+      module.slides?.forEach((slide, slideIndex: number) => {
+        if (slide.image_prompt) {
+          const promptIndex = allImagePrompts.length;
+          allImagePrompts.push(slide.image_prompt);
+          imagePromptMap[`module-${moduleIndex}-slide-${slideIndex}`] = promptIndex;
+        }
+      });
+    });
+
+    // Generate all images in batch (optional - don't fail course generation if images fail)
+    let generatedImages: string[] = [];
+    const SKIP_IMAGES = process.env.SKIP_IMAGE_GENERATION === 'true';
+    
+    if (allImagePrompts.length > 0 && !SKIP_IMAGES) {
+      try {
+        console.log(`🎨 Starting batch image generation for ${allImagePrompts.length} images`);
+        console.log(`🎨 Note: Images are optional. Course will be created even if image generation fails.`);
+        
+        // Add a timeout to prevent hanging
+        const imageGenerationPromise = generateImagesDirectly(allImagePrompts);
+        const timeoutPromise = new Promise<string[]>((resolve) => {
+          setTimeout(() => {
+            console.log('⏰ Image generation timeout - proceeding without images');
+            resolve(new Array(allImagePrompts.length).fill(''));
+          }, 30000); // 30 second timeout
+        });
+        
+        // Race between image generation and timeout
+        generatedImages = await Promise.race([imageGenerationPromise, timeoutPromise]);
+        
+        console.log(`🎨 Image generation complete:`, {
+          requested: allImagePrompts.length,
+          generated: generatedImages.filter(url => url !== '').length
+        });
+      } catch (error) {
+        console.error('🎨 Batch image generation error:', error);
+        // Initialize with empty strings to maintain indices
+        generatedImages = new Array(allImagePrompts.length).fill('');
+      }
+    } else if (SKIP_IMAGES) {
+      console.log('🎨 Skipping image generation (SKIP_IMAGE_GENERATION=true)');
+      generatedImages = new Array(allImagePrompts.length).fill('');
     }
 
-    const result = await response.json();
-    const content = result.candidates?.[0]?.content?.parts?.[0]?.text;
-    
-    if (!content) {
-      throw new Error('No content generated');
-    }
+    console.log(`📚 Creating course with ${modules.length} modules and ${generatedImages.filter(url => url !== '').length} images`);
 
-    const parsedCourse = JSON.parse(content);
-    
-    // Add metadata
-    const fullCourse = {
+    // Create the full course object with generated images
+    const course: Course = {
       id: Date.now().toString(),
-      prompt,
-      depth: contentDepth || 'Low',
+      prompt: prompt || 'Untitled Course',  // Use the original user prompt
+      depth: depth as 'Low' | 'Medium' | 'High',
       cover: {
-        ...parsedCourse.cover,
-        imageUrl: '' // Will be generated separately
+        imageUrl: generatedImages[imagePromptMap['cover']] || '',
+        image_prompt: coverImagePrompt
       },
-      modules: parsedCourse.modules.map((module: GeneratedModule) => ({
+      modules: modules.map((module, moduleIndex) => ({
         ...module,
-        slides: module.slides.map((slide: GeneratedSlide) => ({
+        slides: module.slides?.map((slide, slideIndex: number) => ({
           ...slide,
-          imageUrl: '' // Will be generated separately
-        }))
+          imageUrl: generatedImages[imagePromptMap[`module-${moduleIndex}-slide-${slideIndex}`]] || ''
+        })) || []
       })),
       createdAt: new Date(),
       updatedAt: new Date()
     };
 
-    return NextResponse.json(fullCourse);
-
+    return NextResponse.json(course);
   } catch (error) {
-    console.error('Course generation error:', error);
+    console.error('Error generating course:', error);
     return NextResponse.json(
-      { error: 'Failed to generate course' },
+      { error: 'Failed to generate course content' },
       { status: 500 }
     );
   }
