@@ -13,6 +13,15 @@ export function SlideViewer({ slide }: SlideViewerProps) {
   const { state } = useCourse();
   const depth = state.contentDepth;
 
+  // Debug logging
+  console.log('📄 SlideViewer rendering:', {
+    slideTitle: slide.title,
+    hasImagePrompt: !!slide.image_prompt,
+    imagePrompt: slide.image_prompt?.substring(0, 50) + '...',
+    hasExistingUrl: !!slide.imageUrl,
+    existingUrl: slide.imageUrl
+  });
+
   // Determine which content to show based on depth
   const getContent = () => {
     switch (depth) {

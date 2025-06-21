@@ -65,48 +65,80 @@ export class ApiClient {
     this.baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
   }
 
-  async generateOutline(prompt: string, numModules: number): Promise<CourseModule[]> {
+  async generateOutline(prompt: string, numModules: number, depth: string = 'Medium'): Promise<CourseModule[]> {
+    console.log('🔷 ApiClient.generateOutline called with:', { prompt, numModules, depth });
+    
     const response = await fetch(`${this.baseUrl}/api/generate-outline`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, numModules }),
+      body: JSON.stringify({ prompt, numModules, depth }),
     });
 
     if (!response.ok) {
+      const errorData = await response.text();
+      console.error('🔷 API error response:', errorData);
       throw new Error(`Failed to generate outline: ${response.statusText}`);
     }
 
     const data = await response.json();
-    return data.modules;
+    console.log('🔷 API response data:', data);
+    
+    // The API returns an array directly, not wrapped in a modules property
+    return data;
   }
 
-  async generateCourse(prompt: string, outline: CourseModule[]): Promise<Course> {
+  async generateCourse(prompt: string, outline: CourseModule[], depth: string = 'Medium'): Promise<Course> {
+    console.log('🔷 ApiClient.generateCourse called with:', { 
+      prompt, 
+      outlineLength: outline.length, 
+      depth 
+    });
+    
     const response = await fetch(`${this.baseUrl}/api/generate-course`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, outline }),
+      body: JSON.stringify({ prompt, outline, depth }),
     });
 
+    console.log('🔷 Response status:', response.status);
+    
     if (!response.ok) {
-      throw new Error(`Failed to generate course: ${response.statusText}`);
+      const errorText = await response.text();
+      console.error('🔷 API error response:', errorText);
+      throw new Error(`Failed to generate course: ${response.statusText} - ${errorText}`);
     }
 
-    return response.json();
+    const data = await response.json();
+    console.log('🔷 Course data received:', {
+      hasData: !!data,
+      hasModules: !!data?.modules,
+      moduleCount: data?.modules?.length || 0
+    });
+    
+    return data;
   }
 
   async generateImage(prompt: string): Promise<string> {
+    console.log('🔷 ApiClient.generateImage called with prompt:', prompt.substring(0, 50) + '...');
+    
     const response = await fetch(`${this.baseUrl}/api/generate-image`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt }),
     });
 
+    console.log('🔷 Image generation response status:', response.status);
+
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error('🔷 Image generation error:', errorText);
       throw new Error(`Failed to generate image: ${response.statusText}`);
     }
 
     const data = await response.json();
-    return data.imageUrl;
+    console.log('🔷 Image generation response data:', data);
+    
+    return data.imageUrl || data;
   }
 }
 

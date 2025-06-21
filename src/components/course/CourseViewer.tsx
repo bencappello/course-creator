@@ -18,6 +18,24 @@ interface CourseViewerProps {
 export function CourseViewer({ course, onHome }: CourseViewerProps) {
   const { state, dispatch } = useCourse();
   
+  // Debug logging
+  console.log('🎬 CourseViewer - Course data:', {
+    courseId: course.id,
+    moduleCount: course.modules.length,
+    coverImage: {
+      hasPrompt: !!course.cover?.image_prompt,
+      hasUrl: !!course.cover?.imageUrl
+    },
+    firstModule: course.modules[0] ? {
+      title: course.modules[0].title,
+      slideCount: course.modules[0].slides?.length || 0,
+      firstSlide: course.modules[0].slides?.[0] ? {
+        hasPrompt: !!course.modules[0].slides[0].image_prompt,
+        hasUrl: !!course.modules[0].slides[0].imageUrl
+      } : null
+    } : null
+  });
+  
   // Get current state for this module
   const currentModuleIndex = state.currentSlide[0] || 0;
   const currentSlideIndex = state.currentSlide[currentModuleIndex] || 0;
@@ -29,7 +47,7 @@ export function CourseViewer({ course, onHome }: CourseViewerProps) {
   const handleModuleChange = useCallback((index: number) => {
     dispatch({ 
       type: 'SET_CURRENT_SLIDE', 
-      payload: { moduleIndex: 0, slideIndex: index } 
+      payload: { moduleIndex: index, slideIndex: 0 } 
     });
   }, [dispatch]);
 

@@ -13,18 +13,25 @@ export function useCourseOperations() {
     contentDepth: string
   ) => {
     try {
+      console.log('🔵 Starting outline generation...', { prompt, numModules, contentDepth });
       dispatch({ type: 'SET_LOADING', payload: true });
       dispatch({ type: 'SET_ERROR', payload: null });
       dispatch({ type: 'SET_PROMPT', payload: prompt });
       dispatch({ type: 'SET_CONTENT_DEPTH', payload: contentDepth as ContentDepth });
       
-      const modules = await apiClient.generateOutline(prompt, numModules);
+      console.log('🔵 Calling API to generate outline...');
+      const modules = await apiClient.generateOutline(prompt, numModules, contentDepth);
+      console.log('🔵 Received modules from API:', modules);
+      
       dispatch({ type: 'SET_OUTLINE', payload: modules });
       dispatch({ type: 'SET_STAGE', payload: 'outlineReview' });
-    } catch {
+      console.log('🔵 Set stage to outlineReview');
+    } catch (error) {
+      console.error('❌ Error generating outline:', error);
       dispatch({ type: 'SET_ERROR', payload: 'Failed to generate outline' });
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
+      console.log('🔵 Loading set to false');
     }
   }, [dispatch]);
 
@@ -32,10 +39,18 @@ export function useCourseOperations() {
     if (!state.courseOutline) return;
 
     try {
+      console.log('🔵 Starting full course generation...', {
+        outline: state.courseOutline,
+        depth: state.contentDepth
+      });
+      
       dispatch({ type: 'SET_STAGE', payload: 'generatingCourse' });
       dispatch({ type: 'SET_LOADING', payload: true });
       
-      const course = await apiClient.generateCourse(state.userPrompt, state.courseOutline);
+      console.log('🔵 Calling API to generate course...');
+      const course = await apiClient.generateCourse(state.userPrompt, state.courseOutline, state.contentDepth);
+      console.log('🔵 Received course from API:', course);
+      
       dispatch({ type: 'SET_COURSE', payload: course });
       
       // Initialize course state
@@ -59,7 +74,13 @@ export function useCourseOperations() {
       storage.saveCourse(savedCourse);
       
       dispatch({ type: 'SET_STAGE', payload: 'courseView' });
-    } catch {
+      console.log('🔵 Course generation complete!');
+    } catch (error) {
+      console.error('❌ Error generating course:', error);
+      console.error('❌ Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
       dispatch({ type: 'SET_ERROR', payload: 'Failed to generate course' });
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });

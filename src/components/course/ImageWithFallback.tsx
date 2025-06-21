@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import Image from 'next/image';
 import { Image as ImageIcon } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-import { generateImage } from '@/lib/api-client';
+import { apiClient } from '@/lib/api-client';
 
 interface ImageWithFallbackProps {
   prompt: string;
@@ -19,32 +20,38 @@ export function ImageWithFallback({
   existingUrl 
 }: ImageWithFallbackProps) {
   const [imageUrl, setImageUrl] = useState<string | null>(existingUrl || null);
-  const [loading, setLoading] = useState(!existingUrl);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
 
-  useEffect(() => {
-    if (!existingUrl && prompt) {
-      generateImageFromPrompt();
-    }
-  }, [prompt, existingUrl]);
-
-  const generateImageFromPrompt = async () => {
+  const generateImageFromPrompt = useCallback(async () => {
     try {
+      console.log('🖼️ Generating image for prompt:', prompt.substring(0, 50) + '...');
       setLoading(true);
       setError(false);
-      const result = await generateImage(prompt);
-      if (result.success && result.data) {
-        setImageUrl(result.data);
+      
+      const url = await apiClient.generateImage(prompt);
+      console.log('🖼️ Generated image URL:', url);
+      
+      if (url) {
+        setImageUrl(url);
       } else {
+        console.error('🖼️ No URL returned from image generation');
         setError(true);
       }
     } catch (err) {
-      console.error('Failed to generate image:', err);
+      console.error('🖼️ Failed to generate image:', err);
       setError(true);
     } finally {
       setLoading(false);
     }
-  };
+  }, [prompt]);
+
+  useEffect(() => {
+    // Only generate if we don't have an existing URL and it's not already loading
+    if (!existingUrl && !imageUrl && prompt && !loading && !error) {
+      generateImageFromPrompt();
+    }
+  }, [prompt, existingUrl, imageUrl, loading, error, generateImageFromPrompt]);
 
   if (loading) {
     return (
@@ -58,23 +65,33 @@ export function ImageWithFallback({
     return (
       <div className={`flex flex-col items-center justify-center bg-gray-100 rounded-lg p-8 ${className}`} style={{ aspectRatio: '16/9' }}>
         <ImageIcon className="h-16 w-16 text-gray-400 mb-3" />
-        <p className="text-gray-500 text-sm text-center">Image generation unavailable</p>
-        <button 
-          onClick={generateImageFromPrompt}
-          className="mt-4 text-indigo-600 hover:text-indigo-700 text-sm font-medium"
-        >
-          Try again
-        </button>
+        <p className="text-gray-500 text-sm text-center">
+          {existingUrl ? 'Image unavailable' : 'Image generation failed'}
+        </p>
+        {!existingUrl && (
+          <button 
+            onClick={generateImageFromPrompt}
+            className="mt-4 text-indigo-600 hover:text-indigo-700 text-sm font-medium"
+          >
+            Try again
+          </button>
+        )}
       </div>
     );
   }
 
   return (
-    <img 
+    <Image 
       src={imageUrl} 
       alt={alt} 
+      width={512}
+      height={512}
       className={className}
-      onError={() => setError(true)}
+      onError={() => {
+        console.error('🖼️ Image failed to load:', imageUrl);
+        setError(true);
+      }}
+      style={{ aspectRatio: '1/1', objectFit: 'cover' }}
     />
   );
 } 
