@@ -1,13 +1,13 @@
 'use client';
 
-import React, { useCallback } from 'react';
+import React from 'react';
 import { Course } from '@/lib/types';
 import { useCourse } from '@/components/providers/CourseProvider';
 import { SlideViewer } from './SlideViewer';
 import { QuizComponent } from './QuizComponent';
-import { CourseNavigator } from './CourseNavigator';
 import { ImageWithFallback } from './ImageWithFallback';
 import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
 import { Home, Download } from 'lucide-react';
 
 interface CourseViewerProps {
@@ -25,52 +25,15 @@ export function CourseViewer({ course, onHome }: CourseViewerProps) {
     coverImage: {
       hasPrompt: !!course.cover?.image_prompt,
       hasUrl: !!course.cover?.imageUrl
-    },
-    firstModule: course.modules[0] ? {
-      title: course.modules[0].title,
-      slideCount: course.modules[0].slides?.length || 0,
-      firstSlide: course.modules[0].slides?.[0] ? {
-        hasPrompt: !!course.modules[0].slides[0].image_prompt,
-        hasUrl: !!course.modules[0].slides[0].imageUrl
-      } : null
-    } : null
+    }
   });
   
-  // Get current state for this module
-  const currentModuleIndex = state.currentSlide[0] || 0;
-  const currentSlideIndex = state.currentSlide[currentModuleIndex] || 0;
-  const viewMode = state.viewMode[currentModuleIndex] || 'slide';
-  const quizScore = state.quizScores[currentModuleIndex];
-  
-  const currentModule = course.modules[currentModuleIndex];
-
-  const handleModuleChange = useCallback((index: number) => {
-    dispatch({ 
-      type: 'SET_CURRENT_SLIDE', 
-      payload: { moduleIndex: index, slideIndex: 0 } 
-    });
-  }, [dispatch]);
-
-  const handleSlideChange = useCallback((index: number) => {
-    dispatch({ 
-      type: 'SET_CURRENT_SLIDE', 
-      payload: { moduleIndex: currentModuleIndex, slideIndex: index } 
-    });
-  }, [currentModuleIndex, dispatch]);
-
-  const handleViewModeChange = useCallback((mode: 'slide' | 'quiz') => {
-    dispatch({ 
-      type: 'SET_VIEW_MODE', 
-      payload: { moduleIndex: currentModuleIndex, mode } 
-    });
-  }, [currentModuleIndex, dispatch]);
-
-  const handleQuizComplete = useCallback((score: { score: number; total: number }) => {
+  const handleQuizComplete = (moduleIndex: number) => (score: { score: number; total: number }) => {
     dispatch({ 
       type: 'UPDATE_QUIZ_SCORE', 
-      payload: { moduleIndex: currentModuleIndex, score } 
+      payload: { moduleIndex, score } 
     });
-  }, [currentModuleIndex, dispatch]);
+  };
 
   const handleDownload = () => {
     // Create a simple text version of the course
@@ -119,35 +82,47 @@ export function CourseViewer({ course, onHome }: CourseViewerProps) {
             prompt={course.cover.image_prompt}
             alt="Course Cover"
             existingUrl={course.cover.imageUrl}
-            className="w-full max-w-4xl mx-auto rounded-xl shadow-lg"
+            className="w-64 h-64 mx-auto rounded-xl shadow-lg"
           />
         </div>
       )}
 
-      {/* Course Content */}
-      <div className="max-w-4xl mx-auto">
-        {viewMode === 'slide' ? (
-          <SlideViewer slide={currentModule.slides[currentSlideIndex]} />
-        ) : (
-          <QuizComponent
-            questions={currentModule.quiz}
-            onComplete={handleQuizComplete}
-            previousScore={quizScore}
-          />
-        )}
-      </div>
+      {/* All Modules Displayed Vertically */}
+      <div className="max-w-4xl mx-auto space-y-12">
+        {course.modules.map((module, moduleIndex) => (
+          <Card key={moduleIndex} className="p-8">
+            {/* Module Header */}
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">
+                Module {moduleIndex + 1}: {module.title}
+              </h2>
+              {module.description && (
+                <p className="text-gray-600">{module.description}</p>
+              )}
+            </div>
 
-      {/* Navigation */}
-      <div className="max-w-4xl mx-auto mt-8">
-        <CourseNavigator
-          course={course}
-          currentModuleIndex={currentModuleIndex}
-          currentSlideIndex={currentSlideIndex}
-          viewMode={viewMode}
-          onModuleChange={handleModuleChange}
-          onSlideChange={handleSlideChange}
-          onViewModeChange={handleViewModeChange}
-        />
+            {/* Module Slides */}
+            <div className="space-y-8">
+              {module.slides.map((slide, slideIndex) => (
+                <div key={slideIndex} className="border-l-4 border-blue-500 pl-6">
+                  <SlideViewer slide={slide} />
+                </div>
+              ))}
+            </div>
+
+            {/* Module Quiz */}
+            {module.quiz && module.quiz.length > 0 && (
+              <div className="mt-8 pt-8 border-t">
+                <h3 className="text-xl font-semibold mb-4">Module Quiz</h3>
+                <QuizComponent
+                  questions={module.quiz}
+                  onComplete={handleQuizComplete(moduleIndex)}
+                  previousScore={state.quizScores[moduleIndex]}
+                />
+              </div>
+            )}
+          </Card>
+        ))}
       </div>
     </div>
   );

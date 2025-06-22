@@ -49,13 +49,16 @@ export function ImageWithFallback({
   useEffect(() => {
     // Only generate if we don't have an existing URL and it's not already loading
     if (!existingUrl && !imageUrl && prompt && !loading && !error) {
+      console.log('🖼️ ImageWithFallback: No existing URL, will generate image');
       generateImageFromPrompt();
+    } else if (existingUrl) {
+      console.log('🖼️ ImageWithFallback: Using existing URL:', existingUrl);
     }
   }, [prompt, existingUrl, imageUrl, loading, error, generateImageFromPrompt]);
 
   if (loading) {
     return (
-      <div className={`flex items-center justify-center bg-gray-100 rounded-lg ${className}`} style={{ aspectRatio: '16/9' }}>
+      <div className={`flex items-center justify-center bg-gray-100 rounded-lg ${className}`} style={{ aspectRatio: '1/1' }}>
         <LoadingSpinner size="md" />
       </div>
     );
@@ -63,8 +66,8 @@ export function ImageWithFallback({
 
   if (error || !imageUrl) {
     return (
-      <div className={`flex flex-col items-center justify-center bg-gray-100 rounded-lg p-8 ${className}`} style={{ aspectRatio: '16/9' }}>
-        <ImageIcon className="h-16 w-16 text-gray-400 mb-3" />
+      <div className={`flex flex-col items-center justify-center bg-gray-100 rounded-lg p-8 ${className}`} style={{ aspectRatio: '1/1' }}>
+        <ImageIcon className="h-12 w-12 text-gray-400 mb-3" />
         <p className="text-gray-500 text-sm text-center">
           {existingUrl ? 'Image unavailable' : 'Image generation failed'}
         </p>
@@ -84,8 +87,8 @@ export function ImageWithFallback({
     <Image 
       src={imageUrl} 
       alt={alt} 
-      width={512}
-      height={512}
+      width={256}
+      height={256}
       className={className}
       onError={() => {
         console.error('🖼️ Image failed to load:', imageUrl);
