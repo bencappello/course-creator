@@ -1,72 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
+import { uploadImageToS3, generateS3Key } from '@/lib/s3';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Model priority list - try newer/faster models first based on latest 2025 OpenAI docs
-const IMAGE_MODELS = [
-  'dall-e-3', // High quality but slower
-  'dall-e-2', // Fallback option - supports 512x512
-];
+// Use only DALL-E 2 since it's the only model that supports 256x256
+const IMAGE_MODEL = 'dall-e-2';
+const IMAGE_SIZE = '256x256';
 
-async function generateImageWithFallback(prompt: string, size: string = '512x512') {
-  let lastError;
-  
-  for (const model of IMAGE_MODELS) {
-    try {
-      console.log(`Trying image generation with model: ${model}`);
-      
-      // Adjust size based on model capabilities
-      let adjustedSize = size;
-      if (model === 'dall-e-3' && size === '512x512') {
-        adjustedSize = '1024x1024'; // DALL-E 3 doesn't support 512x512
-      }
-      
-      const response = await openai.images.generate({
-        model: model as Parameters<typeof openai.images.generate>[0]['model'],
-        prompt: `Educational illustration: ${prompt}`,
-        size: adjustedSize as '256x256' | '512x512' | '1024x1024' | '1024x1792' | '1792x1024',
-        n: 1,
-      });
-      
-      const imageUrl = response.data?.[0]?.url;
-      if (imageUrl) {
-        console.log(`✅ Successfully generated image with model: ${model}`);
-        return { imageUrl, modelUsed: model };
-      }
-    } catch (error: unknown) {
-      console.log(`❌ Model ${model} failed:`, error instanceof Error ? error.message : 'Unknown error');
-      lastError = error;
-      
-      // If it's a model not found error, try next model
-      if (error instanceof Error && (
-        error.message?.includes('model') || 
-        error.message?.includes('not found')
-      )) {
-        continue;
-      }
-      
-      // Check for HTTP status errors
-      if (error && typeof error === 'object' && 'status' in error) {
-        const status = (error as { status?: number }).status;
-        if (status === 404 || status === 400) {
-          continue;
-        }
-      }
-      
-      // For other errors, break and return the error
-      throw error;
+async function generateImage(prompt: string) {
+  try {
+    console.log(`Generating 256x256 image with model: ${IMAGE_MODEL}`);
+    
+    const response = await openai.images.generate({
+      model: IMAGE_MODEL,
+      prompt: `Educational illustration: ${prompt}`,
+      size: IMAGE_SIZE as '256x256' | '512x512' | '1024x1024',
+      n: 1,
+    });
+    
+    const imageUrl = response.data?.[0]?.url;
+    if (imageUrl) {
+      console.log(`✅ Successfully generated 256x256 image`);
+      return { imageUrl };
     }
+    throw new Error('No image URL returned');
+  } catch (error) {
+    console.error(`❌ Image generation failed:`, error instanceof Error ? error.message : 'Unknown error');
+    throw error;
   }
-  
-  throw lastError || new Error('All image generation models failed');
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const { prompt, prompts, batchSize = 10 } = await request.json();
+    const { prompt, prompts, batchSize = 10, courseId, moduleIndex, slideIndex } = await request.json();
 
     if (!process.env.OPENAI_API_KEY) {
       return NextResponse.json(
@@ -75,12 +44,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check if S3 is configured
+    const s3Configured = !!(
+      process.env.AWS_ACCESS_KEY_ID && 
+      process.env.AWS_SECRET_ACCESS_KEY && 
+      process.env.S3_BUCKET_NAME
+    );
+
+    if (!s3Configured) {
+      console.warn('⚠️ S3 not configured, images will not be persisted');
+    }
+
     // Handle batch generation if multiple prompts provided
     if (prompts && Array.isArray(prompts)) {
       const allImages: string[] = [];
-      const modelUsage: { [key: string]: number } = {};
       
-      console.log(`🚀 Starting batch generation for ${prompts.length} images`);
+      console.log(`🚀 Starting batch generation for ${prompts.length} 256x256 images`);
       
       // Process in batches to respect rate limits and API constraints
       const maxBatchSize = Math.min(batchSize, 10);
@@ -92,16 +71,15 @@ export async function POST(request: NextRequest) {
         
         // Generate images for this batch in parallel
         const batchPromises = batch.map((promptText: string) =>
-          generateImageWithFallback(promptText, '512x512')
+          generateImage(promptText)
         );
         
         const batchResults = await Promise.all(batchPromises);
         
-        // Collect results and track model usage
+        // Collect results
         batchResults.forEach(result => {
           if (result.imageUrl) {
             allImages.push(result.imageUrl);
-            modelUsage[result.modelUsed] = (modelUsage[result.modelUsed] || 0) + 1;
           }
         });
         
@@ -112,12 +90,10 @@ export async function POST(request: NextRequest) {
         }
       }
       
-      console.log('📊 Model usage summary:', modelUsage);
       console.log(`✅ Generated ${allImages.length}/${prompts.length} images successfully`);
       
       return NextResponse.json({ 
         imageUrls: allImages, 
-        modelUsage,
         totalGenerated: allImages.length,
         totalRequested: prompts.length
       });
@@ -131,12 +107,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await generateImageWithFallback(prompt);
-    console.log('✅ Single image generated with model:', result.modelUsed);
+    const result = await generateImage(prompt);
+    let finalImageUrl = result.imageUrl;
+
+    // Upload to S3 if configured and course info is provided
+    if (s3Configured && courseId) {
+      try {
+        const s3Key = generateS3Key(courseId, moduleIndex || 0, slideIndex ?? 'cover');
+        finalImageUrl = await uploadImageToS3(result.imageUrl, s3Key);
+        console.log(`🎯 Image uploaded to S3: ${finalImageUrl}`);
+      } catch (s3Error) {
+        console.error('Failed to upload to S3, using OpenAI URL:', s3Error);
+        // Fall back to OpenAI URL if S3 upload fails
+      }
+    }
     
     return NextResponse.json({ 
-      imageUrl: result.imageUrl, 
-      modelUsed: result.modelUsed 
+      imageUrl: finalImageUrl, 
+      modelUsed: IMAGE_MODEL 
     });
   } catch (error) {
     console.error('💥 Error generating image:', error);
