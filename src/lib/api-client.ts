@@ -51,10 +51,20 @@ export async function generateCourse(outline: CourseModule[], depth: string) {
   });
 }
 
-export async function generateImage(prompt: string) {
+export async function generateImage(
+  prompt: string, 
+  courseId?: string, 
+  moduleIndex?: number, 
+  slideIndex?: number | 'cover'
+) {
   return fetchApi<string>('/generate-image', {
     method: 'POST',
-    body: JSON.stringify({ prompt }),
+    body: JSON.stringify({ 
+      prompt, 
+      courseId, 
+      moduleIndex, 
+      slideIndex 
+    }),
   });
 }
 
@@ -118,13 +128,28 @@ export class ApiClient {
     return data;
   }
 
-  async generateImage(prompt: string): Promise<string> {
-    console.log('🔷 ApiClient.generateImage called with prompt:', prompt.substring(0, 50) + '...');
+  async generateImage(
+    prompt: string, 
+    courseId?: string, 
+    moduleIndex?: number, 
+    slideIndex?: number | 'cover'
+  ): Promise<string> {
+    console.log('🔷 ApiClient.generateImage called with:', { 
+      prompt, 
+      courseId, 
+      moduleIndex, 
+      slideIndex 
+    });
     
     const response = await fetch(`${this.baseUrl}/api/generate-image`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt }),
+      body: JSON.stringify({ 
+        prompt, 
+        courseId, 
+        moduleIndex, 
+        slideIndex 
+      }),
     });
 
     console.log('🔷 Image generation response status:', response.status);
