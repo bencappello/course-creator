@@ -13,7 +13,7 @@ export default function Home() {
           <Card>
             <CourseStageRenderer />
           </Card>
-        </main>
+      </main>
       </Layout>
     </CourseProvider>
   );
