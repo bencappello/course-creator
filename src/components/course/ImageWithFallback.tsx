@@ -47,14 +47,16 @@ export function ImageWithFallback({
   }, [prompt]);
 
   useEffect(() => {
-    // Only generate if we don't have an existing URL and it's not already loading
-    if (!existingUrl && !imageUrl && prompt && !loading && !error) {
+    // Update imageUrl when existingUrl changes
+    if (existingUrl && existingUrl !== imageUrl) {
+      console.log('🖼️ ImageWithFallback: Updating to new existing URL:', existingUrl);
+      setImageUrl(existingUrl);
+      setError(false);
+    } else if (!existingUrl && !imageUrl && prompt && !loading && !error) {
       console.log('🖼️ ImageWithFallback: No existing URL, will generate image');
       generateImageFromPrompt();
-    } else if (existingUrl) {
-      console.log('🖼️ ImageWithFallback: Using existing URL:', existingUrl);
     }
-  }, [prompt, existingUrl, imageUrl, loading, error, generateImageFromPrompt]);
+  }, [prompt, existingUrl]); // Simplified dependencies to avoid circular updates
 
   if (loading) {
     return (

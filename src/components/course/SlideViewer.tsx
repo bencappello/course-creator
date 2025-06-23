@@ -45,6 +45,7 @@ export function SlideViewer({ slide }: SlideViewerProps) {
       {slide.image_prompt && (
         <div className="mb-6">
           <ImageWithFallback
+            key={`${slide.title}-${slide.imageUrl}`} // Force re-render when slide changes
             prompt={slide.image_prompt}
             alt={slide.title}
             existingUrl={slide.imageUrl}
