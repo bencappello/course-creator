@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
+import { envConfig } from '@/lib/env-config';
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: envConfig.openai.apiKey,
 });
 
 interface ModuleOutline {
@@ -12,14 +13,14 @@ interface ModuleOutline {
 
 export async function POST(request: NextRequest) {
   console.log('🔸 Generate outline endpoint called');
-  console.log('🔸 API Key exists:', !!process.env.OPENAI_API_KEY);
-  console.log('🔸 API Key first 10 chars:', process.env.OPENAI_API_KEY?.substring(0, 10));
+  console.log('🔸 API Key exists:', !!envConfig.openai.apiKey);
+  console.log('🔸 API Key first 10 chars:', envConfig.openai.apiKey?.substring(0, 10));
   
   try {
     const { prompt, numModules, depth } = await request.json();
     console.log('🔸 Request body:', { prompt, numModules, depth });
 
-    if (!process.env.OPENAI_API_KEY) {
+    if (!envConfig.openai.apiKey) {
       console.error('🔸 OpenAI API key not configured');
       return NextResponse.json(
         { error: 'OpenAI API key not configured' },

@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+// Force load environment configuration at startup
+import '@/lib/env-config';
 
 const inter = Inter({
   subsets: ["latin"],

@@ -1,26 +1,42 @@
 import { S3Client, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
+import { envConfig } from './env-config';
 
-// Initialize S3 client
-const s3Client = new S3Client({
-  region: process.env.AWS_REGION || 'us-east-1',
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-  },
-});
+/**
+ * Create a new S3 client with current environment variables
+ * This ensures we always use the latest credentials from .env.local
+ */
+function createS3Client(): S3Client {
+  console.log('🔄 Creating S3 client with environment config');
+  console.log('📍 AWS_ACCESS_KEY_ID:', envConfig.aws.accessKeyId);
+  console.log('📍 AWS_REGION:', envConfig.aws.region);
+  console.log('📍 S3_BUCKET_NAME:', envConfig.s3.bucketName);
+  
+  return new S3Client({
+    region: envConfig.aws.region,
+    credentials: {
+      accessKeyId: envConfig.aws.accessKeyId,
+      secretAccessKey: envConfig.aws.secretAccessKey,
+    },
+  });
+}
 
-const BUCKET_NAME = process.env.S3_BUCKET_NAME || '';
+/**
+ * Get the bucket name from environment configuration
+ */
+function getBucketName(): string {
+  return envConfig.s3.bucketName;
+}
 
 /**
  * Generate a unique S3 key for an image based on course and content
  */
 export function generateS3Key(courseId: string, moduleIndex: number, slideIndex: number | 'cover'): string {
-  const timestamp = Date.now();
+  // Don't add another timestamp - courseId already contains one
   if (slideIndex === 'cover') {
-    return `courses/${courseId}/cover-${timestamp}.jpg`;
+    return `courses/${courseId}/cover.jpg`;
   }
-  return `courses/${courseId}/module-${moduleIndex}-slide-${slideIndex}-${timestamp}.jpg`;
+  return `courses/${courseId}/module-${moduleIndex}-slide-${slideIndex}.jpg`;
 }
 
 /**
@@ -28,8 +44,9 @@ export function generateS3Key(courseId: string, moduleIndex: number, slideIndex:
  */
 export async function checkS3ObjectExists(key: string): Promise<boolean> {
   try {
+    const s3Client = createS3Client();
     await s3Client.send(new HeadObjectCommand({
-      Bucket: BUCKET_NAME,
+      Bucket: getBucketName(),
       Key: key,
     }));
     return true;
@@ -52,11 +69,15 @@ export async function uploadImageToS3(imageUrl: string, s3Key: string): Promise<
     const buffer = await response.arrayBuffer();
     const uint8Array = new Uint8Array(buffer);
 
+    // Create a fresh S3 client for this upload
+    const s3Client = createS3Client();
+    const bucketName = getBucketName();
+
     // Upload to S3
     const upload = new Upload({
       client: s3Client,
       params: {
-        Bucket: BUCKET_NAME,
+        Bucket: bucketName,
         Key: s3Key,
         Body: uint8Array,
         ContentType: 'image/jpeg',
@@ -68,7 +89,7 @@ export async function uploadImageToS3(imageUrl: string, s3Key: string): Promise<
     await upload.done();
 
     // Return the public URL
-    const publicUrl = `https://${BUCKET_NAME}.s3.${process.env.AWS_REGION || 'us-east-1'}.amazonaws.com/${s3Key}`;
+    const publicUrl = `https://${bucketName}.s3.${envConfig.aws.region}.amazonaws.com/${s3Key}`;
     console.log(`✅ Uploaded image to S3: ${publicUrl}`);
     
     return publicUrl;

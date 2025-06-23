@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { uploadImageToS3, generateS3Key } from '@/lib/s3';
+import { envConfig } from '@/lib/env-config';
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: envConfig.openai.apiKey,
 });
 
 // Use only DALL-E 2 since it's the only model that supports 256x256
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
   try {
     const { prompt, prompts, batchSize = 10, courseId, moduleIndex, slideIndex } = await request.json();
 
-    if (!process.env.OPENAI_API_KEY) {
+    if (!envConfig.openai.apiKey) {
       return NextResponse.json(
         { error: 'OpenAI API key not configured' },
         { status: 500 }
@@ -46,9 +47,9 @@ export async function POST(request: NextRequest) {
 
     // Check if S3 is configured
     const s3Configured = !!(
-      process.env.AWS_ACCESS_KEY_ID && 
-      process.env.AWS_SECRET_ACCESS_KEY && 
-      process.env.S3_BUCKET_NAME
+      envConfig.aws.accessKeyId && 
+      envConfig.aws.secretAccessKey && 
+      envConfig.s3.bucketName
     );
 
     if (!s3Configured) {
