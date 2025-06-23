@@ -75,6 +75,10 @@ export function useCourseOperations() {
       };
       storage.saveCourse(savedCourse);
       
+      // Reload saved courses to update the sidebar
+      const updatedCourses = storage.getSavedCourses();
+      dispatch({ type: 'LOAD_SAVED_COURSES', payload: updatedCourses });
+      
       dispatch({ type: 'SET_STAGE', payload: 'courseView' });
       console.log('🔵 Course generation complete!');
     } catch (error) {
