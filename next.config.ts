@@ -9,6 +9,12 @@ const nextConfig: NextConfig = {
         port: '',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'course-creator-images.s3.us-west-2.amazonaws.com',
+        port: '',
+        pathname: '/**',
+      },
     ],
   },
 };
