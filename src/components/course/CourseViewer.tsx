@@ -1,10 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Course } from '@/lib/types';
 import { useCourse } from '@/components/providers/CourseProvider';
-import { SlideViewer } from './SlideViewer';
-import { QuizComponent } from './QuizComponent';
+import { ModuleSlideNavigator } from './ModuleSlideNavigator';
 import { ImageWithFallback } from './ImageWithFallback';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -17,6 +16,10 @@ interface CourseViewerProps {
 
 export function CourseViewer({ course, onHome }: CourseViewerProps) {
   const { state, dispatch } = useCourse();
+  // Track which modules are expanded - first module starts expanded
+  const [expandedModules, setExpandedModules] = useState<Record<number, boolean>>(
+    Object.fromEntries(course.modules.map((_, index) => [index, index === 0]))
+  );
   
   // Debug logging
   console.log('🎬 CourseViewer - Course data:', {
@@ -84,6 +87,7 @@ export function CourseViewer({ course, onHome }: CourseViewerProps) {
       {course.cover && course.cover.image_prompt && (
         <div className="mb-8">
           <ImageWithFallback
+            key={`cover-${course.id}-${course.cover.imageUrl}`} // Force re-render when course changes
             prompt={course.cover.image_prompt}
             alt="Course Cover"
             existingUrl={course.cover.imageUrl}
@@ -92,40 +96,21 @@ export function CourseViewer({ course, onHome }: CourseViewerProps) {
         </div>
       )}
 
-      {/* All Modules Displayed Vertically */}
+      {/* Modules with Slide Navigation */}
       <div className="max-w-4xl mx-auto space-y-12">
         {course.modules.map((module, moduleIndex) => (
           <Card key={moduleIndex} className="p-8">
-            {/* Module Header */}
-            <div className="mb-8">
-              <h2 className="text-2xl font-bold text-gray-800 mb-2">
-                Module {moduleIndex + 1}: {module.title}
-              </h2>
-              {module.description && (
-                <p className="text-gray-600">{module.description}</p>
-              )}
-            </div>
-
-            {/* Module Slides */}
-            <div className="space-y-8">
-              {module.slides.map((slide, slideIndex) => (
-                <div key={slideIndex} className="border-l-4 border-blue-500 pl-6">
-                  <SlideViewer slide={slide} />
-                </div>
-              ))}
-            </div>
-
-            {/* Module Quiz */}
-            {module.quiz && module.quiz.length > 0 && (
-              <div className="mt-8 pt-8 border-t">
-                <h3 className="text-xl font-semibold mb-4">Module Quiz</h3>
-                <QuizComponent
-                  questions={module.quiz}
-                  onComplete={handleQuizComplete(moduleIndex)}
-                  previousScore={state.quizScores[moduleIndex]}
-                />
-              </div>
-            )}
+            <ModuleSlideNavigator
+              module={module}
+              moduleIndex={moduleIndex}
+              onQuizComplete={handleQuizComplete(moduleIndex)}
+              previousScore={state.quizScores[moduleIndex]}
+              isExpanded={expandedModules[moduleIndex]}
+              onToggleExpand={() => setExpandedModules(prev => ({
+                ...prev,
+                [moduleIndex]: !prev[moduleIndex]
+              }))}
+            />
           </Card>
         ))}
       </div>
