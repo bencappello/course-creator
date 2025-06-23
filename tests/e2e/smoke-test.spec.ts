@@ -89,3 +89,54 @@ test.describe('Smoke Tests', () => {
     await expect(page.getByRole('heading', { name: 'Agentic Course Designer' })).toBeVisible();
   });
 }); 
+
+test.describe('S3 Storage Smoke Test', () => {
+  test('should create course and reload without regenerating images', async ({ page }) => {
+    await page.goto('http://localhost:3000');
+    
+    // Create a new course
+    await page.fill('textarea#prompt', 'Quick S3 Test Course');
+    await page.selectOption('select[name="numModules"]', '1');
+    await page.selectOption('select[name="depth"]', 'Low');
+    
+    await page.click('button:has-text("Generate Outline")');
+    await page.waitForSelector('button:has-text("Generate Full Course")');
+    
+    // Check console logs
+    let imageGenerationCount = 0;
+    page.on('console', msg => {
+      if (msg.text().includes('Generating image')) {
+        imageGenerationCount++;
+      }
+    });
+    
+    await page.click('button:has-text("Generate Full Course")');
+    
+    // Wait for course to be generated
+    await page.waitForSelector('h1:has-text("Quick S3 Test Course")', { timeout: 60000 });
+    
+    // Navigate away
+    await page.keyboard.press('Escape'); // Close sidebar if open
+    await page.click('button:has-text("Home")');
+    await page.waitForSelector('textarea#prompt');
+    
+    // Reset counter for reload test
+    const firstGenCount = imageGenerationCount;
+    imageGenerationCount = 0;
+    
+    // Open sidebar and load the course
+    await page.locator('header button').first().click();
+    await page.waitForSelector('text=My Courses');
+    
+    // Click on the test course
+    await page.click('text=Quick S3 Test Course');
+    await page.waitForSelector('h1:has-text("Quick S3 Test Course")');
+    
+    // Wait a bit to ensure no new image generation happens
+    await page.waitForTimeout(2000);
+    
+    // Verify no new images were generated on reload
+    expect(imageGenerationCount).toBe(0);
+    console.log(`✅ Success: Generated ${firstGenCount} images on creation, 0 on reload`);
+  });
+}); 
