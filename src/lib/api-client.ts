@@ -122,8 +122,27 @@ export class ApiClient {
     console.log('🔷 Course data received:', {
       hasData: !!data,
       hasModules: !!data?.modules,
-      moduleCount: data?.modules?.length || 0
+      moduleCount: data?.modules?.length || 0,
+      hasCoverImageUrl: !!data?.cover?.imageUrl,
+      coverImageUrl: data?.cover?.imageUrl,
+      firstSlideImageUrl: data?.modules?.[0]?.slides?.[0]?.imageUrl
     });
+    
+    // Log detailed module data
+    if (data?.modules) {
+      data.modules.forEach((module: any, mIdx: number) => {
+        console.log(`🔷 Module ${mIdx}:`, {
+          title: module.title,
+          slideCount: module.slides?.length || 0,
+          slides: module.slides?.map((slide: any, sIdx: number) => ({
+            slideIndex: sIdx,
+            title: slide.title,
+            hasImageUrl: !!slide.imageUrl,
+            imageUrl: slide.imageUrl
+          }))
+        });
+      });
+    }
     
     return data;
   }

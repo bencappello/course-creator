@@ -24,7 +24,12 @@ export function CourseViewer({ course, onHome }: CourseViewerProps) {
     moduleCount: course.modules.length,
     coverImage: {
       hasPrompt: !!course.cover?.image_prompt,
-      hasUrl: !!course.cover?.imageUrl
+      hasUrl: !!course.cover?.imageUrl,
+      imageUrl: course.cover?.imageUrl
+    },
+    firstSlide: {
+      hasImageUrl: !!course.modules?.[0]?.slides?.[0]?.imageUrl,
+      imageUrl: course.modules?.[0]?.slides?.[0]?.imageUrl
     }
   });
   

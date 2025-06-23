@@ -50,6 +50,8 @@ export function useCourseOperations() {
       console.log('🔵 Calling API to generate course...');
       const course = await apiClient.generateCourse(state.userPrompt, state.courseOutline, state.contentDepth);
       console.log('🔵 Received course from API:', course);
+      console.log('🔵 Course cover imageUrl:', course.cover?.imageUrl);
+      console.log('🔵 First slide imageUrl:', course.modules?.[0]?.slides?.[0]?.imageUrl);
       
       dispatch({ type: 'SET_COURSE', payload: course });
       

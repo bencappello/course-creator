@@ -28,10 +28,36 @@ export function useCourses() {
         updatedAt: new Date()
       };
 
+      // Check if images need to be regenerated
+      let needsImageGeneration = false;
+      
+      // Check cover image
+      if (!fullCourse.cover.imageUrl || fullCourse.cover.imageUrl === '') {
+        needsImageGeneration = true;
+      }
+      
+      // Check module images
+      for (const courseModule of fullCourse.modules) {
+        for (const slide of courseModule.slides) {
+          if (!slide.imageUrl || slide.imageUrl === '') {
+            needsImageGeneration = true;
+            break;
+          }
+        }
+        if (needsImageGeneration) break;
+      }
+
+      // Only regenerate images if needed
+      if (needsImageGeneration) {
+        console.log('⚠️ Some images are missing, regenerating...');
+        
       // Calculate total steps for progress tracking
-      let totalSteps = 1; // Cover image
+        let totalSteps = 0;
+        if (!fullCourse.cover.imageUrl) totalSteps++;
       fullCourse.modules.forEach(m => {
-        totalSteps += m.slides.length;
+          m.slides.forEach(s => {
+            if (!s.imageUrl) totalSteps++;
+          });
       });
       
       let completedSteps = 0;
@@ -46,15 +72,48 @@ export function useCourses() {
         });
       };
 
-      // Regenerate images
+        // Regenerate missing images only
+        if (!fullCourse.cover.imageUrl) {
       updateProgress('Generating cover image...');
       fullCourse.cover.imageUrl = await apiClient.generateImage(fullCourse.cover.image_prompt);
+        }
 
       for (const courseModule of fullCourse.modules) {
         for (const slide of courseModule.slides) {
+            if (!slide.imageUrl) {
           updateProgress(`Generating images for ${courseModule.title}...`);
           slide.imageUrl = await apiClient.generateImage(slide.image_prompt);
         }
+          }
+        }
+        
+        // Save the updated course with new image URLs
+        const updatedSavedCourse = {
+          ...courseToLoad,
+          course: {
+            prompt: fullCourse.prompt,
+            depth: fullCourse.depth,
+            cover: fullCourse.cover,
+            modules: fullCourse.modules
+          }
+        };
+        
+        // Update in storage
+        const allCourses = storage.getSavedCourses();
+        const updatedCourses = allCourses.map(c => 
+          c.id === courseId ? updatedSavedCourse : c
+        );
+        storage.clearHistory();
+        updatedCourses.forEach(course => storage.saveCourse(course));
+      } else {
+        console.log('✅ All images found in storage, loading directly from S3');
+        dispatch({ 
+          type: 'SET_PROGRESS', 
+          payload: { 
+            progress: 100, 
+            message: 'Course loaded successfully!' 
+          } 
+        });
       }
 
       dispatch({ type: 'SET_COURSE', payload: fullCourse });
