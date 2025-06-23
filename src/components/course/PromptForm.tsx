@@ -34,7 +34,7 @@ export function PromptForm() {
           id="prompt"
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          className="mt-1 w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:outline-none transition"
+          className="mt-1 w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-400 focus:outline-none transition text-gray-900 placeholder-gray-500"
           rows={3}
           placeholder="e.g., A course on Brazilian Portuguese for someone who speaks Italian."
         />
@@ -49,7 +49,7 @@ export function PromptForm() {
             id="modules"
             value={numModules}
             onChange={(e) => setNumModules(e.target.value)}
-            className="mt-1 w-full p-3 border border-gray-300 rounded-lg"
+            className="mt-1 w-full p-3 border border-gray-300 rounded-lg text-gray-900"
           >
             <option value="1">1 Module (Quick Start)</option>
             <option value="2">2 Modules (Standard)</option>
@@ -65,7 +65,7 @@ export function PromptForm() {
             id="depth"
             value={contentDepth}
             onChange={(e) => setContentDepth(e.target.value)}
-            className="mt-1 w-full p-3 border border-gray-300 rounded-lg"
+            className="mt-1 w-full p-3 border border-gray-300 rounded-lg text-gray-900"
           >
             <option value="Low">Low (Concise)</option>
             <option value="Medium">Medium (Detailed)</option>

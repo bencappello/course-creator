@@ -116,7 +116,7 @@ export function QuizComponent({
                 key={index}
                 onClick={() => handleAnswerSelect(option)}
                 disabled={submitted}
-                className={`w-full text-left p-4 rounded-lg border transition-all ${
+                className={`w-full text-left p-4 rounded-lg border transition-all text-gray-900 ${
                   showCorrectAnswer
                     ? 'border-green-500 bg-green-50'
                     : showWrongAnswer
